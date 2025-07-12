@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  # API Service
+  crawler-api:
+    build: 
+      context: ./services/crawler-api
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://crawler:password@postgres:5432/brightedge
+      - REDIS_URL=redis://redis:6379
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./services/crawler-api:/app
+    networks:
+      - brightedge-network
+
+  # Worker Service
+  crawler-worker:
+    build:
+      context: ./services/crawler-worker
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgresql://crawler:password@postgres:5432/brightedge
+      - REDIS_URL=redis://redis:6379
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+      - WORKER_CONCURRENCY=5
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./services/crawler-worker:/app
+    networks:
+      - brightedge-network
+    deploy:
+      replicas: 2
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:14
+    environment:
+      - POSTGRES_DB=brightedge
+      - POSTGRES_USER=crawler
+      - POSTGRES_PASSWORD=password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./services/shared/sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - brightedge-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - brightedge-network
+
+  # Prometheus Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+    networks:
+      - brightedge-network
+
+  # Grafana Dashboard
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana:/etc/grafana/provisioning
+    networks:
+      - brightedge-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  brightedge-network:
+    driver: bridge

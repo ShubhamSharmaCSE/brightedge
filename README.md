@@ -1,4 +1,4 @@
-# BrightEdge Web Crawler
+# Web Crawler
 
 A production-grade, scalable web crawler service built with FastAPI, PostgreSQL, and AWS infrastructure.
 
